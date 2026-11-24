@@ -1,0 +1,12 @@
+# Virtual environment
+.venv/
+
+# Secrets — never commit
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Mac system files
+.DS_Store
