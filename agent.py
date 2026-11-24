@@ -73,11 +73,11 @@ def run_tool(name, inputs):
 
 
 # ---------- Part 5: the agent loop ----------
-def ask(question):
+def ask(messages, question):
     """Answer a question, letting Claude call tools as many times as it needs."""
-    messages = [{"role": "user", "content": question}]
+    messages.append({"role": "user", "content": question})
 
-    while True:
+    for round_number in range(MAX_ROUNDS):
         # Send the conversation + tool menu to Claude
         response = client.messages.create(
             model=MODEL,
@@ -108,8 +108,24 @@ def ask(question):
 
         # Send the results back to Claude, then loop again
         messages.append({"role": "user", "content": results})
+    return "Sorry, I couldn't finish answering that. Please try a simpler question."    
 
 
-# ---------- Part 6: quick test ----------
+# ---------- Part 6: chat in the terminal ----------
+def main():
+    messages = []  # the conversation, kept for the whole chat
+    print("Travel planner ready. Type 'quit' to exit.\n")
+
+    while True:
+        question = input("You: ").strip()
+        if question.lower() in ("quit", "exit"):
+            break
+        if not question:
+            continue
+
+        answer = ask(messages, question)
+        print(f"Agent: {answer}\n")
+
+
 if __name__ == "__main__":
-    print(ask("What's the weather in Tokyo tomorrow?"))
+    main()
