@@ -1,6 +1,13 @@
+"""Tools for the travel planner agent.
+
+Each function fetches real data from a free public API (Open-Meteo, no API key
+needed) and returns a small, clean result the agent can use.
+"""
+
 from datetime import date, timedelta
 import httpx
 
+# Open-Meteo returns weather as code numbers; this maps them to readable text.
 WEATHER_CODES = {
     0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
     45: "Fog", 48: "Fog",
@@ -12,6 +19,12 @@ WEATHER_CODES = {
 }
 
 def find_place(name):
+    """Look up a place by name and return its location details.
+
+    Returns a dict with name, state, country, latitude, longitude and timezone,
+    or None if no place matches.
+    """
+    
     response = httpx.get(
         "https://geocoding-api.open-meteo.com/v1/search",
         params={"name": name, "count": 1, "language": "en"},
@@ -23,6 +36,7 @@ def find_place(name):
     if "results" not in data:
         return None
 
+    # Keep only the fields need;
     place = data["results"][0]
     return {
         "name": place["name"],
@@ -34,6 +48,12 @@ def find_place(name):
     }
 
 def get_forecast(latitude, longitude, start_date, end_date):
+    """Get the daily weather forecast for a location.
+
+    Dates are 'YYYY-MM-DD' strings (both included). Open-Meteo only forecasts
+    about 16 days ahead. Returns a list with one dict per day.
+    """
+
     response = httpx.get(
         "https://api.open-meteo.com/v1/forecast",
         params={
@@ -63,7 +83,7 @@ def get_forecast(latitude, longitude, start_date, end_date):
 
 
 if __name__ == "__main__":
-    place = find_place("Melbourne")
+    place = find_place("Adelaide")
     today = date.today()
     print(get_forecast(
         place["latitude"],
