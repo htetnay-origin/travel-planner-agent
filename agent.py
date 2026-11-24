@@ -13,6 +13,7 @@ from tools import find_place, get_forecast
 # ---------- Part 1: the Claude client ----------
 client = anthropic.Anthropic()
 MODEL = "claude-haiku-5-5"
+MAX_ROUNDS = 5  # safety limit on how many times we call Claude per question
 
 # NEW: instructions for Claude, including today's date
 SYSTEM = f"""You are a helpful travel planning assistant.
