@@ -2,6 +2,7 @@
 
 import httpx
 import re
+import chromadb
 
 
 def fetch_guide(city):
@@ -95,9 +96,45 @@ def make_chunks(city, max_chars=1200):
             chunks.append({"city": city, "section": section["section"], "text": piece})
     return chunks
 
+# The vector database lives in the .chroma folder; "cosine" = the similarity we just tried
+db = chromadb.PersistentClient(path=".chroma")
+collection = db.get_or_create_collection("guides", metadata={"hnsw:space": "cosine"})
+
+
+def index_city(city):
+    """Download a city's guide, chunk it, and store the chunks in the vector database."""
+    chunks = make_chunks(city)
+    if not chunks:
+        return 0
+    collection.upsert(
+        ids=[f"{city}-{i}" for i in range(len(chunks))],
+        documents=[c["text"] for c in chunks],
+        metadatas=[{"city": c["city"], "section": c["section"]} for c in chunks],
+    )
+    return len(chunks)
+
+
+def search_guides(query, city=None, k=5):
+    """Find the k guide chunks whose meaning is closest to the query."""
+    results = collection.query(
+        query_texts=[query],
+        n_results=k,
+        where={"city": city} if city else None,
+    )
+    matches = []
+    for text, meta, distance in zip(
+        results["documents"][0], results["metadatas"][0], results["distances"][0]
+    ):
+        matches.append({
+            "city": meta["city"],
+            "section": meta["section"],
+            "similarity": round(1 - distance, 2),
+            "text": text,
+        })
+    return matches
+
 if __name__ == "__main__":
-    chunks = make_chunks("Melbourne")
-    print("Chunks:", len(chunks))
-    print("Longest:", max(len(c["text"]) for c in chunks), "chars")
-    print()
-    print(chunks[20])
+    print("Indexed", index_city("Melbourne"), "chunks")
+    for m in search_guides("where can I get cheap food?", city="Melbourne", k=3):
+        print(f"\n{m['similarity']}  [{m['city']} > {m['section']}]")
+        print(m["text"][:200])
