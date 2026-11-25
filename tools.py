@@ -18,6 +18,15 @@ WEATHER_CODES = {
     95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Thunderstorm with hail",
 }
 
+# Which OpenStreetMap tags count as each category
+PLACE_CATEGORIES = {
+    "attractions": '["tourism"~"attraction|viewpoint|zoo|theme_park|aquarium"]',
+    "museums": '["tourism"~"museum|gallery"]',
+    "food": '["amenity"~"restaurant|cafe"]',
+    "parks": '["leisure"~"park|garden|nature_reserve"]',
+    "nightlife": '["amenity"~"bar|pub|nightclub"]',
+}
+
 def find_place(name):
     """Look up a place by name and return its location details.
 
