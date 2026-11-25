@@ -8,7 +8,7 @@ load_dotenv()  # loads ANTHROPIC_API_KEY from .env
 
 import anthropic
 
-from tools import find_place, get_forecast
+from tools import find_attractions, find_place, get_forecast, find_landmarks
 
 # ---------- Part 1: the Claude client ----------
 client = anthropic.Anthropic()
@@ -50,6 +50,46 @@ TOOLS = [
             "required": ["latitude", "longitude", "start_date", "end_date"],
         },
     },
+
+        {
+        "name": "find_attractions",
+                "description": "Find cafes, restaurants, parks or bars near a location using "
+                       "OpenStreetMap. Use find_landmarks for sightseeing instead. This "
+                       "service is sometimes slow or unavailable; if it fails, tell the "
+                       "user honestly and do not invent place names.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number"},
+                "longitude": {"type": "number"},
+                "category": {
+                    "type": "string",
+                    "enum": ["attractions", "museums", "food", "parks", "nightlife"],
+                },
+                "radius_km": {"type": "number", "description": "Search radius in km, default 3"},
+            },
+            "required": ["latitude", "longitude", "category"],
+        },
+    },
+    {
+        "name": "find_landmarks",
+        "description": "Find notable places near a location using Wikipedia: landmarks, "
+                       "museums, historic buildings, theatres, arcades and more. Fast and "
+                       "reliable; use this first for sightseeing. Returns the closest "
+                       "articles with short descriptions; some are not tourist "
+                       "attractions (streets, offices, events, historical incidents), so "
+                       "only recommend real places worth visiting. For a different area "
+                       "of a city, call find_place on that suburb first.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "latitude": {"type": "number"},
+                "longitude": {"type": "number"},
+                "radius_km": {"type": "number", "description": "Search radius in km, max 10, default 5"},
+            },
+            "required": ["latitude", "longitude"],
+        },
+    },
 ]
 
 
@@ -57,6 +97,8 @@ TOOLS = [
 TOOL_FUNCTIONS = {
     "find_place": find_place,
     "get_forecast": get_forecast,
+    "find_attractions": find_attractions,
+    "find_landmarks": find_landmarks,
 }
 
 
