@@ -90,7 +90,7 @@ def get_forecast(latitude, longitude, start_date, end_date):
     return days
 
 
-def find_attractions(latitude, longitude, category="attractions", radius_km=5, limit=10):
+def find_attractions(latitude, longitude, category="attractions", radius_km=3, limit=10):
     """Find named places of one category near a location, using OpenStreetMap.
 
     Returns a list of dicts with name, type, latitude and longitude.
@@ -100,18 +100,39 @@ def find_attractions(latitude, longitude, category="attractions", radius_km=5, l
 
     # Overpass query: everything matching the filter within radius_m of the point
     query = f"""
-    [out:json][timeout:25];
+    [out:json][timeout:20];
     nwr{tag_filter}(around:{radius_m},{latitude},{longitude});
-    out center 60;
+    out center 30;
     """
 
-    response = httpx.post(
+    # response = httpx.post(
+    #     "https://overpass-api.de/api/interpreter",
+    #     data={"data": query},
+    #     headers={"User-Agent": "travel-planner-agent (student project)"},
+    #     timeout=30,
+    # )
+    # response.raise_for_status()
+
+    # Overpass is a free shared service; if one server fails, try the next
+    servers = [
         "https://overpass-api.de/api/interpreter",
-        data={"data": query},
-        headers={"User-Agent": "travel-planner-agent (student project)"},
-        timeout=30,
-    )
-    response.raise_for_status()
+        "https://overpass.kumi.systems/api/interpreter",
+    ]
+    for url in servers:
+        try:
+            response = httpx.post(
+                url,
+                data={"data": query},
+                headers={"User-Agent": "travel-planner-agent (student project)"},
+                timeout=30,
+            )
+            response.raise_for_status()
+            break  # success, stop trying other servers
+        except httpx.HTTPError as error:
+            last_error = error
+    else:
+        # only runs if no server succeeded
+        raise last_error
 
     places = []
     for item in response.json()["elements"]:
@@ -131,7 +152,47 @@ def find_attractions(latitude, longitude, category="attractions", radius_km=5, l
     return places
 
 
+def find_landmarks(latitude, longitude, radius_km=5, limit=40):
+    """Find notable places near a location using Wikipedia's location search.
+
+    Returns a list of dicts with name, a short description, latitude and longitude.
+    Wikipedia only covers places notable enough to have an article.
+    """
+    radius_m = min(int(radius_km * 1000), 10000)  # Wikipedia allows max 10 km
+
+    response = httpx.get(
+        "https://en.wikipedia.org/w/api.php",
+        params={
+            "action": "query",
+            "generator": "geosearch",            # find articles near a point...
+            "ggscoord": f"{latitude}|{longitude}",
+            "ggsradius": radius_m,
+            "ggslimit": limit,
+            "prop": "description|coordinates",   # ...and include a short description
+            "colimit": "max",
+            "format": "json",
+            "formatversion": 2,
+        },
+        headers={"User-Agent": "travel-planner-agent/0.1 (student project)"},
+        timeout=15,
+    )
+    response.raise_for_status()
+    pages = response.json().get("query", {}).get("pages", [])
+
+    places = []
+    for page in pages:
+        if not page.get("description"):               # NEW
+            continue  # skip articles with no description  # NEW
+        coords = page.get("coordinates", [{}])[0]
+        places.append({
+            "name": page["title"],
+            "description": page.get("description", ""),
+            "latitude": coords.get("lat"),
+            "longitude": coords.get("lon"),
+        })
+    return places
+
 if __name__ == "__main__":
     place = find_place("Melbourne")
-    for p in find_attractions(place["latitude"], place["longitude"], "museums"):
+    for p in find_landmarks(place["latitude"], place["longitude"]):
         print(p)
