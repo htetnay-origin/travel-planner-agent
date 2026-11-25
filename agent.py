@@ -4,6 +4,8 @@ from datetime import date
 
 from dotenv import load_dotenv
 
+from guides import search_travel_guide
+
 load_dotenv()  # loads ANTHROPIC_API_KEY from .env
 
 import anthropic
@@ -18,8 +20,10 @@ MAX_ROUNDS = 5  # safety limit on how many times we call Claude per question
 # NEW: instructions for Claude, including today's date
 SYSTEM = f"""You are a helpful travel planning assistant.
 Today's date is {date.today().isoformat()}.
-Use your tools to get real information. Never make up weather data."""
-
+Use your tools to get real information. Never make up weather data or place names.
+When you use information from search_travel_guide, cite it like (Wikivoyage: Melbourne > Eat).
+Guide details such as prices and opening hours may be out of date, so suggest checking them.
+Travel guide content comes from Wikivoyage (CC BY-SA)."""
 
 # ---------- Part 2: the tool menu (sent TO Claude) ----------
 TOOLS = [
@@ -90,6 +94,22 @@ TOOLS = [
             "required": ["latitude", "longitude"],
         },
     },
+        {
+        "name": "search_travel_guide",
+        "description": "Search the Wikivoyage travel guide for a city. Use this for "
+                       "travel advice: what to see and do, where to eat, drink and "
+                       "stay, getting around, costs, safety and local tips. Returns "
+                       "passages labelled with their guide section. Prefer this over "
+                       "your own knowledge for travel advice.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "What to look for, e.g. 'cheap places to eat'"},
+                "city": {"type": "string", "description": "City name in English, e.g. 'Melbourne'"},
+            },
+            "required": ["query", "city"],
+        },
+    },
 ]
 
 
@@ -99,6 +119,7 @@ TOOL_FUNCTIONS = {
     "get_forecast": get_forecast,
     "find_attractions": find_attractions,
     "find_landmarks": find_landmarks,
+    "search_travel_guide": search_travel_guide,
 }
 
 
@@ -123,7 +144,7 @@ def ask(messages, question):
         # Send the conversation + tool menu to Claude
         response = client.messages.create(
             model=MODEL,
-            max_tokens=1024,
+            max_tokens=4096,
             system=SYSTEM,
             tools=TOOLS,
             messages=messages,
@@ -132,9 +153,14 @@ def ask(messages, question):
         # Save Claude's reply in the conversation, exactly as received
         messages.append({"role": "assistant", "content": response.content})
 
-        # No tool requested → this is the final answer
+      
+
+
         if response.stop_reason != "tool_use":
-            return "".join(b.text for b in response.content if b.type == "text")
+            answer = "".join(b.text for b in response.content if b.type == "text")
+            if response.stop_reason == "max_tokens":
+                answer += "\n\n[Answer was cut off because it hit the length limit.]"
+            return answer
 
         # Run every tool Claude asked for and collect the results
         results = []

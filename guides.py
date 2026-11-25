@@ -133,8 +133,26 @@ def search_guides(query, city=None, k=5):
         })
     return matches
 
+def search_travel_guide(query, city):
+    """Tool for the agent: search a city's Wikivoyage guide.
+
+    Indexes the city first if it isn't in the database yet.
+    Returns the best matching passages as text, each labelled with its source.
+    """
+    city = city.strip().title()  # "melbourne" and "MELBOURNE" → "Melbourne"
+
+    # Is this city already in the database? If not, download and index it.
+    already_indexed = collection.get(where={"city": city}, limit=1)["ids"]
+    if not already_indexed:
+        if index_city(city) == 0:
+            return f"No Wikivoyage guide found for {city}."
+
+    matches = search_guides(query, city=city, k=5)
+    return "\n\n".join(
+        f"[Wikivoyage: {m['city']} > {m['section']}]\n{m['text']}" for m in matches
+    )
+
 if __name__ == "__main__":
-    print("Indexed", index_city("Melbourne"), "chunks")
-    for m in search_guides("where can I get cheap food?", city="Melbourne", k=3):
-        print(f"\n{m['similarity']}  [{m['city']} > {m['section']}]")
-        print(m["text"][:200])
+    print(search_travel_guide("how do trams work and what do they cost?", "melbourne"))
+    print("\n" + "=" * 60 + "\n")
+    print(search_travel_guide("best area to stay", "Hobart"))
