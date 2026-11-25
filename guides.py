@@ -3,6 +3,7 @@
 import httpx
 import re
 import chromadb
+from pathlib import Path
 
 
 def fetch_guide(city):
@@ -96,8 +97,9 @@ def make_chunks(city, max_chars=1200):
             chunks.append({"city": city, "section": section["section"], "text": piece})
     return chunks
 
-# The vector database lives in the .chroma folder; "cosine" = the similarity we just tried
-db = chromadb.PersistentClient(path=".chroma")
+# Always use the .chroma folder next to this file, wherever the program is started from
+DB_PATH = Path(__file__).parent / ".chroma"
+db = chromadb.PersistentClient(path=str(DB_PATH))
 collection = db.get_or_create_collection("guides", metadata={"hnsw:space": "cosine"})
 
 
