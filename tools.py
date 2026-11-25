@@ -90,13 +90,48 @@ def get_forecast(latitude, longitude, start_date, end_date):
     return days
 
 
+def find_attractions(latitude, longitude, category="attractions", radius_km=5, limit=10):
+    """Find named places of one category near a location, using OpenStreetMap.
+
+    Returns a list of dicts with name, type, latitude and longitude.
+    """
+    tag_filter = PLACE_CATEGORIES[category]
+    radius_m = int(radius_km * 1000)
+
+    # Overpass query: everything matching the filter within radius_m of the point
+    query = f"""
+    [out:json][timeout:25];
+    nwr{tag_filter}(around:{radius_m},{latitude},{longitude});
+    out center 60;
+    """
+
+    response = httpx.post(
+        "https://overpass-api.de/api/interpreter",
+        data={"data": query},
+        headers={"User-Agent": "travel-planner-agent (student project)"},
+        timeout=30,
+    )
+    response.raise_for_status()
+
+    places = []
+    for item in response.json()["elements"]:
+        tags = item.get("tags", {})
+        if "name" not in tags:
+            continue  # skip unnamed places
+        # Points have lat/lon directly; areas and buildings have a "center"
+        point = item if "lat" in item else item.get("center", {})
+        places.append({
+            "name": tags["name"],
+            "type": tags.get("tourism") or tags.get("amenity") or tags.get("leisure"),
+            "latitude": point.get("lat"),
+            "longitude": point.get("lon"),
+        })
+        if len(places) >= limit:
+            break
+    return places
+
 
 if __name__ == "__main__":
-    place = find_place("Adelaide")
-    today = date.today()
-    print(get_forecast(
-        place["latitude"],
-        place["longitude"],
-        today.isoformat(),
-        (today + timedelta(days=2)).isoformat(),
-    ))
+    place = find_place("Melbourne")
+    for p in find_attractions(place["latitude"], place["longitude"], "museums"):
+        print(p)
