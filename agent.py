@@ -59,7 +59,7 @@ async def run_tool(session, name, inputs):
 async def ask(session, tools, messages, question):
     """Answer a question, letting Claude call tools as many times as it needs."""
     messages.append({"role": "user", "content": question})
-
+    steps = []
     for round_number in range(MAX_ROUNDS):
         response = await client.messages.create(
             model=MODEL,
@@ -74,12 +74,12 @@ async def ask(session, tools, messages, question):
             answer = "".join(b.text for b in response.content if b.type == "text")
             if response.stop_reason == "max_tokens":
                 answer += "\n\n[Answer was cut off because it hit the length limit.]"
-            return answer
+            return answer, steps
 
         results = []
         for block in response.content:
             if block.type == "tool_use":
-                print(f"  [tool] {block.name}({block.input})")
+                steps.append({"tool": block.name, "input": block.input})
                 output = await run_tool(session, block.name, block.input)
                 results.append({
                     "type": "tool_result",
@@ -88,7 +88,7 @@ async def ask(session, tools, messages, question):
                 })
         messages.append({"role": "user", "content": results})
 
-    return "Sorry, I couldn't finish answering that. Please try a simpler question."
+    return "Sorry, I couldn't finish answering that. Please try a simpler question.", steps
 
 
 # ---------- Part 5: connect to the server, then chat ----------
@@ -107,8 +107,11 @@ async def main():
                     break
                 if not question:
                     continue
-                answer = await ask(session, tools, messages, question)
+                answer, steps = await ask(session, tools, messages, question)
+                for step in steps:
+                    print(f"  [tool] {step['tool']}({step['input']})")
                 print(f"Agent: {answer}\n")
+                
 
 
 if __name__ == "__main__":
