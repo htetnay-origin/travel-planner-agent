@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Travel Planner Agent</title>
+  <!-- marked turns Claude's markdown (**bold**, lists) into HTML; DOMPurify makes that HTML safe -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify/dist/purify.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 760px; margin: 0 auto; padding: 24px;
+           background: #f6f7f9; color: #1d1d1f; }
+    h1 { font-size: 1.4rem; margin-bottom: 4px; }
+    .subtitle { color: #666; margin-top: 0; font-size: 0.9rem; }
+    #chat { display: flex; flex-direction: column; gap: 12px; margin: 20px 0 100px; }
+    .msg { padding: 12px 16px; border-radius: 12px; line-height: 1.5; }
+    .user { background: #2563eb; color: white; align-self: flex-end; max-width: 80%; }
+    .agent { background: white; border: 1px solid #e3e5e8; }
+    .steps { font-family: ui-monospace, monospace; font-size: 0.78rem; color: #555;
+             background: #eef0f3; border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; }
+    .thinking { color: #888; font-style: italic; }
+    form { position: fixed; bottom: 0; left: 0; right: 0; background: #f6f7f9; padding: 16px;
+           display: flex; justify-content: center; gap: 8px; }
+    input { width: 100%; max-width: 640px; padding: 12px; border: 1px solid #ccc;
+            border-radius: 10px; font-size: 1rem; }
+    button { padding: 12px 18px; border: none; border-radius: 10px; background: #2563eb;
+             color: white; font-size: 1rem; cursor: pointer; }
+    button:disabled { background: #9db5ee; }
+  </style>
+</head>
+<body>
+  <h1>Travel Planner Agent</h1>
+  <p class="subtitle">Claude + MCP tools (weather, landmarks) + RAG over Wikivoyage guides</p>
+
+  <div id="chat"></div>
+
+  <form id="form">
+    <input id="input" placeholder="e.g. Plan a rainy day in Melbourne tomorrow" autocomplete="off" required>
+    <button id="send">Send</button>
+  </form>
+
+  <script>
+    const conversationId = crypto.randomUUID();  // a unique id for this browser tab's conversation
+    const chat = document.getElementById("chat");
+    const form = document.getElementById("form");
+    const input = document.getElementById("input");
+    const send = document.getElementById("send");
+
+    // Add a message bubble to the page
+    function addMessage(className, html) {
+      const div = document.createElement("div");
+      div.className = "msg " + className;
+      div.innerHTML = html;
+      chat.appendChild(div);
+      window.scrollTo(0, document.body.scrollHeight);
+      return div;
+    }
+
+    // Make user text safe to show as HTML
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // When the user presses Send
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();  // stop the page from reloading
+      const message = input.value.trim();
+      if (!message) return;
+
+      addMessage("user", escapeHtml(message));
+      input.value = "";
+      send.disabled = true;
+      const pending = addMessage("agent thinking", "Thinking and using tools…");
+
+      try {
+        // Send the message to our FastAPI backend, just like the /docs test page did
+        const response = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversation_id: conversationId, message: message }),
+        });
+        if (!response.ok) throw new Error("Server error " + response.status);
+        const data = await response.json();
+
+        // Show the tool steps, then the answer
+        const steps = data.steps
+          .map(s => "🔧 " + escapeHtml(s.tool) + " " + escapeHtml(JSON.stringify(s.input)))
+          .join("<br>");
+        pending.className = "msg agent";
+        pending.innerHTML = (steps ? `<div class="steps">${steps}</div>` : "")
+                          + DOMPurify.sanitize(marked.parse(data.answer));
+      } catch (error) {
+        pending.className = "msg agent";
+        pending.textContent = "Something went wrong: " + error.message;
+      } finally {
+        send.disabled = false;
+        input.focus();
+      }
+    });
+  </script>
+</body>
+</html>
